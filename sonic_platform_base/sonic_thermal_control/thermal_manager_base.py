@@ -1,4 +1,5 @@
 import json
+from collections import OrderedDict
 from .thermal_policy import ThermalPolicy
 from .thermal_json_object import ThermalJsonObject
 
@@ -16,7 +17,7 @@ class ThermalManagerBase(object):
     JSON_FIELD_RUN_AT_BOOT_UP = "run_at_boot_up"
 
     # Dictionary of ThermalPolicy objects.
-    _policy_dict = {}
+    _policy_dict = OrderedDict()
 
     # Dictionary of thermal information objects. A thermal information object is used by Thermal Policy
     _thermal_info_dict = {}
