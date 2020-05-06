@@ -12,6 +12,7 @@ try:
     import re
     from . import bcmshell       # Dot module supports both Python 2 and Python 3 using explicit relative import methods
     from sonic_eeprom import eeprom_dts
+    from portconfig import parse_port_config_file
     from .sff8472 import sff8472InterfaceId  # Dot module supports both Python 2 and Python 3 using explicit relative import methods
     from .sff8472 import sff8472Dom    # Dot module supports both Python 2 and Python 3 using explicit relative import methods
     from .sff8436 import sff8436InterfaceId  # Dot module supports both Python 2 and Python 3 using explicit relative import methods
@@ -111,6 +112,27 @@ qsfp_compliance_code_tup = ('10/40G Ethernet Compliance Code', 'SONET Compliance
                             'SAS/SATA compliance codes', 'Gigabit Ethernet Compliant codes',
                             'Fibre Channel link length/Transmitter Technology',
                             'Fibre Channel transmission media', 'Fibre Channel Speed')
+
+
+def read_porttab_mappings(porttabfile):
+        logical_to_bcm = {}
+        logical_to_physical = {}
+        physical_to_logical = {}
+        ports, port_alias_map, port_alias_asic_map = parse_port_config_file(porttabfile)
+        logical = [None] * len(ports)
+        for name, data in ports.items():
+            alias = data['alias']
+            index = int(data['index'])
+            logical[index] = alias
+            logical_to_bcm[alias] = 'xe{}'.format(index)
+            logical_to_physical[alias] = [index]
+            if index not in physical_to_logical:
+                physical_to_logical[index] = [name]
+            else:
+                physical_to_logical[index].append(name)
+
+        return logical, logical_to_bcm, logical_to_physical, physical_to_logical
+
 
 class SfpUtilError(Exception):
     """Base class for exceptions in this module."""
@@ -361,96 +383,8 @@ class SfpUtilBase(object):
         return False
 
     def read_porttab_mappings(self, porttabfile):
-        logical = []
-        logical_to_bcm = {}
-        logical_to_physical = {}
-        physical_to_logical = {}
-        last_fp_port_index = 0
-        last_portname = ""
-        first = 1
-        port_pos_in_file = 0
-        parse_fmt_port_config_ini = False
-
-        try:
-            f = open(porttabfile)
-        except:
-            raise
-
-        parse_fmt_port_config_ini = (os.path.basename(porttabfile) == "port_config.ini")
-
-        # Read the porttab file and generate dicts
-        # with mapping for future reference.
-        #
-        # TODO: Refactor this to use the portconfig.py module that now
-        # exists as part of the sonic-config-engine package.
-        title = []
-        for line in f:
-            line.strip()
-            if re.search("^#", line) is not None:
-                # The current format is: # name lanes alias index speed
-                # Where the ordering of the columns can vary
-                title = line.split()[1:]
-                continue
-
-            # Parsing logic for 'port_config.ini' file
-            if (parse_fmt_port_config_ini):
-                # bcm_port is not explicitly listed in port_config.ini format
-                # Currently we assume ports are listed in numerical order according to bcm_port
-                # so we use the port's position in the file (zero-based) as bcm_port
-                portname = line.split()[0]
-
-                bcm_port = str(port_pos_in_file)
-
-                if "index" in title:
-                    fp_port_index = int(line.split()[title.index("index")])
-                # Leave the old code for backward compatibility
-                elif len(line.split()) >= 4:
-                    fp_port_index = int(line.split()[3])
-                else:
-                    fp_port_index = portname.split("Ethernet").pop()
-                    fp_port_index = int(fp_port_index.split("s").pop(0))/4
-            else:  # Parsing logic for older 'portmap.ini' file
-                (portname, bcm_port) = line.split("=")[1].split(",")[:2]
-
-                fp_port_index = portname.split("Ethernet").pop()
-                fp_port_index = int(fp_port_index.split("s").pop(0))/4
-
-            if ((len(self.sfp_ports) > 0) and (fp_port_index not in self.sfp_ports)):
-                continue
-
-            if first == 1:
-                # Initialize last_[physical|logical]_port
-                # to the first valid port
-                last_fp_port_index = fp_port_index
-                last_portname = portname
-                first = 0
-
-            logical.append(portname)
-
-            logical_to_bcm[portname] = "xe" + bcm_port
-            logical_to_physical[portname] = [fp_port_index]
-            if physical_to_logical.get(fp_port_index) is None:
-                physical_to_logical[fp_port_index] = [portname]
-            else:
-                physical_to_logical[fp_port_index].append(
-                    portname)
-
-            last_fp_port_index = fp_port_index
-            last_portname = portname
-
-            port_pos_in_file += 1
-
-        self.logical = logical
-        self.logical_to_bcm = logical_to_bcm
-        self.logical_to_physical = logical_to_physical
-        self.physical_to_logical = physical_to_logical
-
-        """
-        print("logical: " + self.logical)
-        print("logical to bcm: " + self.logical_to_bcm)
-        print("logical to physical: " + self.logical_to_physical)
-        print("physical to logical: " + self.physical_to_logical)
-        """
+        self.logical, self.logical_to_bcm, self.logical_to_physical, self.physical_to_logical = read_porttab_mappings(porttabfile)
+        
     def read_phytab_mappings(self, phytabfile):
         logical = []
         phytab_mappings = {}
