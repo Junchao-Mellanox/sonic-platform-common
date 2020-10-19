@@ -436,7 +436,7 @@ class TlvInfoDecoder(eeprom_base.EepromDecoder):
                 return (False, None)
             if ord(e[tlv_index]) == code:
                 return (True, [ord(e[tlv_index]), ord(e[tlv_index+1]), \
-                               e[tlv_index+2:tlv_index+2+ord(e[tlv_index+1])]].strip('\0'))
+                               e[tlv_index+2:tlv_index+2+ord(e[tlv_index+1])].strip('\0')])
             tlv_index += ord(e[tlv_index+1]) + 2
         return (False, None)
 
