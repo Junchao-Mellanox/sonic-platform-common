@@ -560,9 +560,8 @@ class ChassisBase(device_base.DeviceBase):
                   value is a dictionary with key:value pairs in the format of
                   {'device_id':'device_event'},
                   where device_id is the device ID for this device and
-                        device_event,
-                             status='1' represents device inserted,
-                             status='0' represents device removed.
+                        device_event is a 32 bits bitmap in string.
+                             bit 32 : 0=device removed, 1=device inserted
                   Ex. {'fan':{'0':'0', '2':'1'}, 'sfp':{'11':'0'}}
                       indicates that fan 0 has been removed, fan 2
                       has been inserted and sfp 11 has been removed.
@@ -570,11 +569,15 @@ class ChassisBase(device_base.DeviceBase):
                   there are some other error event could be raised from SFP, when
                   these error happened, SFP eeprom will not be avalaible, XCVRD shall
                   stop to read eeprom before SFP recovered from error status.
-                      status='2' I2C bus stuck,
-                      status='3' Bad eeprom,
-                      status='4' Unsupported cable,
-                      status='5' High Temperature,
-                      status='6' Bad cable.
+                      bit 31  : 0=OK, 1=I2C bus stuck,
+                      bit 30  : 0=OK, 1=Bad eeprom,
+                      bit 29  : 0=OK, 1=Unsupported cable,
+                      bit 28  : 0=OK, 1=High Temperature,
+                      bit 27  : 0=OK, 1=Bad cable.
+                      bit 1~26: reserved. Must be 0.
+                  Ex. {'sfp':{'11':'7'}}
+                      indicates that sfp 11 has been inserted with error "I2C bus stuck"
+                      and "Bad eeprom"
         """
         raise NotImplementedError
 
