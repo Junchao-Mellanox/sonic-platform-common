@@ -279,10 +279,13 @@ class CmisApi(XcvrApi):
             if tx_bias_scale is not None else 'N/A'
         }
         laser_temp_dict = self.get_laser_temperature()
-        threshold_info_dict['lasertemphighalarm'] = laser_temp_dict['high alarm']
-        threshold_info_dict['lasertemplowalarm'] = laser_temp_dict['low alarm']
-        threshold_info_dict['lasertemphighwarning'] = laser_temp_dict['high warn']
-        threshold_info_dict['lasertemplowwarning'] = laser_temp_dict['low warn']
+        try:
+            threshold_info_dict['lasertemphighalarm'] = laser_temp_dict['high alarm']
+            threshold_info_dict['lasertemplowalarm'] = laser_temp_dict['low alarm']
+            threshold_info_dict['lasertemphighwarning'] = laser_temp_dict['high warn']
+            threshold_info_dict['lasertemplowwarning'] = laser_temp_dict['low warn']
+        except (KeyError, TypeError):
+            pass
         self.vdm_dict = self.get_vdm()
         try:
             threshold_info_dict['prefecberhighalarm'] = self.vdm_dict['Pre-FEC BER Average Media Input'][1][1]
@@ -1915,10 +1918,12 @@ class CmisApi(XcvrApi):
         ret = {}
         # Read the application advertisment in lower memory
         dic = self.xcvr_eeprom.read(consts.APPLS_ADVT_FIELD)
+        if not dic:
+            return ret
 
         if not self.is_flat_memory():
             # Read the application advertisement in page01
-            try:                    
+            try:
                 dic.update(self.xcvr_eeprom.read(consts.APPLS_ADVT_FIELD_PAGE01))
             except (TypeError, AttributeError) as e:
                 logger.error('Failed to read APPLS_ADVT_FIELD_PAGE01: ' + str(e))

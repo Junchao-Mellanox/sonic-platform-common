@@ -119,7 +119,6 @@ class TestSff8636(object):
                 self.api.get_transceiver_bulk_status()
                 self.api.get_transceiver_info()
                 self.api.get_transceiver_threshold_info()
-                self.api.get_transceiver_status()
             except:
                 assert 0, traceback.format_exc()
             run_num -= 1

@@ -15,6 +15,7 @@ class TestCmis(object):
     reader = MagicMock(return_value=None)
     writer = MagicMock()
     eeprom = XcvrEeprom(reader, writer, mem_map)
+    old_read_func = eeprom.read
     api = CmisApi(eeprom)
 
     @pytest.mark.parametrize("mock_response, expected", [
@@ -2118,6 +2119,7 @@ class TestCmis(object):
             i = random.randint(0, 1)
             return None if i == 0 else b'0' * size
 
+        self.api.xcvr_eeprom.read = self.old_read_func
         self.api.xcvr_eeprom.reader = mock_read_raw
 
         run_num = 5
