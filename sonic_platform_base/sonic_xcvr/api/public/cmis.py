@@ -501,8 +501,12 @@ class CmisApi(XcvrApi):
         if not tx_bias_support:
             return ["N/A" for _ in range(self.NUM_CHANNELS)]
         scale_raw = self.xcvr_eeprom.read(consts.TX_BIAS_SCALE)
+        if not scale_raw:
+            return ["N/A" for _ in range(self.NUM_CHANNELS)]
         scale = 2**scale_raw if scale_raw < 3 else 1
         tx_bias = self.xcvr_eeprom.read(consts.TX_BIAS_FIELD)
+        if not tx_bias:
+            return ["N/A" for _ in range(self.NUM_CHANNELS)]
         for key, value in tx_bias.items():
             tx_bias[key] *= scale
         return [tx_bias['LaserBiasTx%dField' % i] for i in range(1, self.NUM_CHANNELS + 1)]
