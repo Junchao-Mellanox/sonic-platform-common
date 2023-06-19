@@ -115,7 +115,7 @@ class SsdUtil(SsdBase):
         if self.vendor_ssd_info:
             self.health = self._parse_re('Health:\s*(.+?)%', self.vendor_ssd_info)
             self.temperature = self._parse_re('Temperature\s*\[\s*(.+?)\]', self.vendor_ssd_info)
-        
+
         if self.health == NOT_AVAILABLE:
             health_raw = self.parse_id_number(INNODISK_HEALTH_ID)
             if health_raw == NOT_AVAILABLE:
@@ -134,10 +134,16 @@ class SsdUtil(SsdBase):
             self.temperature = self._parse_re('Temperature_Celsius\s*\d*\s*(\d+?)\s+', self.vendor_ssd_info)
             nand_endurance = self._parse_re('NAND_Endurance\s*\d*\s*(\d+?)\s+', self.vendor_ssd_info)
             avg_erase_count = self._parse_re('Average_Erase_Count\s*\d*\s*(\d+?)\s+', self.vendor_ssd_info)
-            try:
-                self.health = 100 - (float(avg_erase_count) * 100 / float(nand_endurance))
-            except (ValueError, ZeroDivisionError):
-                pass
+            if nand_endurance != NOT_AVAILABLE and avg_erase_count != NOT_AVAILABLE:
+                try:
+                    self.health = 100 - (float(avg_erase_count) * 100 / float(nand_endurance))
+                except (ValueError, ZeroDivisionError):
+                    pass
+            else:
+                try:
+                    self.health = float(self._parse_re('Remaining_Life_Left\s*\d*\s*\d*\s*(\d+?)\s+', self.vendor_ssd_info))
+                except ValueError:
+                    pass
 
     def fetch_vendor_ssd_info(self, diskdev, model):
         self.vendor_ssd_info = self._execute_shell(self.vendor_ssd_utility[model]["utility"].format(diskdev))
