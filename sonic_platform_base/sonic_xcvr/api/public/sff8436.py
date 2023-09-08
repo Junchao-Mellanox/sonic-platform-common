@@ -308,3 +308,6 @@ class Sff8436Api(XcvrApi):
 
     def get_power_override_support(self):
         return not self.is_copper()
+
+    def _get_valid_eeprom_pages(self):
+        return (0, 1, 2, 3) if not self.is_flat_memory() else (0,)
