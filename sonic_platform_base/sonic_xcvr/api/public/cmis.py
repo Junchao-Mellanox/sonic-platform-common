@@ -2438,4 +2438,7 @@ class CmisApi(XcvrApi):
 
         return None
 
+    def _get_valid_eeprom_pages(self):
+        return (0, 1, 2, 16, 17) if not self.is_flat_memory() else (0,)
+
     # TODO: other XcvrApi methods

@@ -326,3 +326,22 @@ class Sff8472Api(XcvrApi):
             if size <= 0 or size + offset - 1 > 255:
                 raise ValueError(f'Invalid size {size} for wire address {wire_addr}, valid range: [1, {255 - offset + 1}]')
             return page * 128 + offset + 256
+
+    def _get_valid_eeprom_pages(self):
+        return (0, 1) if self.is_active_cable() else (0,)
+
+    def _dump_eeprom_pages(self, pages):
+        indent = ' ' * 8
+        lines = []
+        for page in pages:
+            if page == 0:
+                if self.is_active_cable():
+                    lines.append(f'{indent}A0h dump')
+                    lines.append(self._dump_eeprom(0, 256, 0, indent))
+                else:
+                    lines.append(f'{indent}A0h dump')
+                    lines.append(self._dump_eeprom(0, 128, 0, indent))
+            elif page == 1:
+                lines.append(f'\n{indent}A2h dump (lower 128 bytes)')
+                lines.append(self._dump_eeprom(256, 128, 0, indent))
+        return '\n'.join(lines)
