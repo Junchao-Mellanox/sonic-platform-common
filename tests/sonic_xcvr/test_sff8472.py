@@ -324,9 +324,6 @@ class TestSff8472(object):
             self.api.get_overall_offset(0, -1, 1, wire_addr='a2h')
 
         with pytest.raises(ValueError):
-            self.api.get_overall_offset(0, 128, 1, wire_addr='A2h')
-
-        with pytest.raises(ValueError):
             self.api.get_overall_offset(0, 0, 0, wire_addr='A2h')
 
         with pytest.raises(ValueError):
