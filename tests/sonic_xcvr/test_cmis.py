@@ -3038,6 +3038,7 @@ class TestCmis(object):
         assert self.api.xcvr_eeprom.write.call_count == 4
 
     def test_get_error_description(self):
+        old_func = self.api.is_flat_memory
         self.api.is_flat_memory = MagicMock()
         self.api.is_flat_memory.return_value = False
         self.api.get_module_state = MagicMock()
@@ -3069,6 +3070,7 @@ class TestCmis(object):
 
         result = self.api.get_error_description()
         assert result is 'OK'
+        self.api.is_flat_memory = old_func
 
     def test_random_read_fail(self):
         def mock_read_raw(offset, size):
