@@ -3038,39 +3038,37 @@ class TestCmis(object):
         assert self.api.xcvr_eeprom.write.call_count == 4
 
     def test_get_error_description(self):
-        old_func = self.api.is_flat_memory
-        self.api.is_flat_memory = MagicMock()
-        self.api.is_flat_memory.return_value = False
-        self.api.get_module_state = MagicMock()
-        self.api.get_module_state.return_value = 'ModuleReady'
-        self.api.get_datapath_state = MagicMock()
-        self.api.get_datapath_state.return_value = {
-            'DP1State': 'DataPathActivated',
-            'DP2State': 'DataPathActivated',
-            'DP3State': 'DataPathActivated',
-            'DP4State': 'DataPathActivated',
-            'DP5State': 'DataPathActivated',
-            'DP6State': 'DataPathActivated',
-            'DP7State': 'DataPathActivated',
-            'DP8State': 'DataPathActivated'
-        }
-        self.api.get_config_datapath_hostlane_status = MagicMock()
-        self.api.get_config_datapath_hostlane_status.return_value = {
-            'ConfigStatusLane1': 'ConfigSuccess',
-            'ConfigStatusLane2': 'ConfigSuccess',
-            'ConfigStatusLane3': 'ConfigSuccess',
-            'ConfigStatusLane4': 'ConfigSuccess',
-            'ConfigStatusLane5': 'ConfigSuccess',
-            'ConfigStatusLane6': 'ConfigSuccess',
-            'ConfigStatusLane7': 'ConfigSuccess',
-            'ConfigStatusLane8': 'ConfigSuccess'
-        }
-        self.api.xcvr_eeprom.read = MagicMock()
-        self.api.xcvr_eeprom.read.return_value = 0x10
-
-        result = self.api.get_error_description()
-        assert result is 'OK'
-        self.api.is_flat_memory = old_func
+        with patch.object(self.api, 'is_flat_memory') as mock_method:
+            mock_method.return_value = False
+            self.api.get_module_state = MagicMock()
+            self.api.get_module_state.return_value = 'ModuleReady'
+            self.api.get_datapath_state = MagicMock()
+            self.api.get_datapath_state.return_value = {
+                'DP1State': 'DataPathActivated',
+                'DP2State': 'DataPathActivated',
+                'DP3State': 'DataPathActivated',
+                'DP4State': 'DataPathActivated',
+                'DP5State': 'DataPathActivated',
+                'DP6State': 'DataPathActivated',
+                'DP7State': 'DataPathActivated',
+                'DP8State': 'DataPathActivated'
+            }
+            self.api.get_config_datapath_hostlane_status = MagicMock()
+            self.api.get_config_datapath_hostlane_status.return_value = {
+                'ConfigStatusLane1': 'ConfigSuccess',
+                'ConfigStatusLane2': 'ConfigSuccess',
+                'ConfigStatusLane3': 'ConfigSuccess',
+                'ConfigStatusLane4': 'ConfigSuccess',
+                'ConfigStatusLane5': 'ConfigSuccess',
+                'ConfigStatusLane6': 'ConfigSuccess',
+                'ConfigStatusLane7': 'ConfigSuccess',
+                'ConfigStatusLane8': 'ConfigSuccess'
+            }
+            self.api.xcvr_eeprom.read = MagicMock()
+            self.api.xcvr_eeprom.read.return_value = 0x10
+    
+            result = self.api.get_error_description()
+            assert result is 'OK'
 
     def test_random_read_fail(self):
         def mock_read_raw(offset, size):
