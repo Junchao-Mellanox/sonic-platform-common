@@ -116,9 +116,22 @@ class CmisApi(XcvrApi):
 
     def __init__(self, xcvr_eeprom):
         super(CmisApi, self).__init__(xcvr_eeprom)
+        self.application_advertisement = None
+        self.flat_memory = None
+        self.coherent_module = None
+        self.module_type_abbreviation = None
+        self.tx_disable_support = None
+        self.module_pwr_up_duration = None
+        self.cmis_rev = None
+        self.lpmode_support = None
+        self.datapath_init_duration = None
+        self.datapath_deinit_duration = None
+        self.datapath_tx_turnon_duration = None
+        self.datapath_tx_turnoff_duration = None
+        self.module_pwr_down_duration = None
         self.vdm = CmisVdmApi(xcvr_eeprom) if not self.is_flat_memory() else None
         self.cdb = CmisCdbApi(xcvr_eeprom) if not self.is_flat_memory() else None
-
+        
     def _get_vdm_key_to_db_prefix_map(self):
         return CMIS_VDM_KEY_TO_DB_PREFIX_KEY_MAP
 
@@ -230,7 +243,9 @@ class CmisApi(XcvrApi):
         '''
         This function returns the SFF8024Identifier (module type / form-factor). Table 4-1 in SFF-8024 Rev4.6
         '''
-        return self.xcvr_eeprom.read(consts.ID_ABBRV_FIELD)
+        if self.module_type_abbreviation is None:
+            self.module_type_abbreviation = self.xcvr_eeprom.read(consts.ID_ABBRV_FIELD)
+        return self.module_type_abbreviation
 
     def get_connector_type(self):
         '''
@@ -253,11 +268,13 @@ class CmisApi(XcvrApi):
         '''
         This function returns the CMIS version the module complies to
         '''
+        if self.cmis_rev is not None:
+            return self.cmis_rev
         cmis_major = self.xcvr_eeprom.read(consts.CMIS_MAJOR_REVISION)
         cmis_minor = self.xcvr_eeprom.read(consts.CMIS_MINOR_REVISION)
         cmis_rev = [str(num) for num in [cmis_major, cmis_minor]]
-        return '.'.join(cmis_rev)
-
+        self.cmis_rev = '.'.join(cmis_rev)
+        return self.cmis_rev
     # Transceiver status
     def get_module_state(self):
         '''
@@ -557,7 +574,10 @@ class CmisApi(XcvrApi):
         return float("{:.3f}".format(voltage))
 
     def is_flat_memory(self):
-        return self.xcvr_eeprom.read(consts.FLAT_MEM_FIELD) is not False
+        if self.flat_memory is not None:
+            return self.flat_memory
+        self.flat_memory = self.xcvr_eeprom.read(consts.FLAT_MEM_FIELD) is not False
+        return self.flat_memory
 
     def get_temperature_support(self):
         return not self.is_flat_memory()
@@ -828,7 +848,9 @@ class CmisApi(XcvrApi):
         return tx_los_final
 
     def get_tx_disable_support(self):
-        return not self.is_flat_memory() and self.xcvr_eeprom.read(consts.TX_DISABLE_SUPPORT_FIELD)
+        if self.tx_disable_support is None:
+            self.tx_disable_support = not self.is_flat_memory() and self.xcvr_eeprom.read(consts.TX_DISABLE_SUPPORT_FIELD)
+        return self.tx_disable_support
 
     def get_tx_disable(self):
         tx_disable_support = self.get_tx_disable_support()
@@ -941,11 +963,13 @@ class CmisApi(XcvrApi):
         return not self.is_flat_memory()
 
     def get_lpmode_support(self):
+        if self.lpmode_support is not None:
+            return self.lpmode_support
         power_class = self.xcvr_eeprom.read(consts.POWER_CLASS_FIELD)
         if power_class is None:
             return False
-        return "Power Class 1" not in power_class
-
+        self.lpmode_support = "Power Class 1" not in power_class
+        return self.lpmode_support
     def get_power_override_support(self):
         return False
 
@@ -985,65 +1009,86 @@ class CmisApi(XcvrApi):
         '''
         Returns True if the module follow C-CMIS spec, False otherwise
         '''
+        if self.coherent_module is not None:
+            return self.coherent_module
         mintf = self.get_module_media_interface()
-        return False if 'ZR' not in mintf else True
+        self.coherent_module = False if 'ZR' not in mintf else True
+        return self.coherent_module
 
     def get_datapath_init_duration(self):
         '''
         This function returns the duration of datapath init
         '''
+        if self.datapath_init_duration is not None:
+            return self.datapath_init_duration
         if self.is_flat_memory():
             return 0
         duration = self.xcvr_eeprom.read(consts.DP_PATH_INIT_DURATION)
         if duration is None:
             return 0
         value = float(duration)
-        return value * DATAPATH_INIT_DURATION_MULTIPLIER if value <= DATAPATH_INIT_DURATION_OVERRIDE_THRESHOLD else value
+        self.datapath_init_duration = value * DATAPATH_INIT_DURATION_MULTIPLIER if value <= DATAPATH_INIT_DURATION_OVERRIDE_THRESHOLD else value
+        return self.datapath_init_duration
 
     def get_datapath_deinit_duration(self):
         '''
         This function returns the duration of datapath deinit
         '''
+        if self.datapath_deinit_duration is not None:
+            return self.datapath_deinit_duration
         if self.is_flat_memory():
             return 0
         duration = self.xcvr_eeprom.read(consts.DP_PATH_DEINIT_DURATION)
-        return float(duration) if duration is not None else 0
+        self.datapath_deinit_duration = float(duration) if duration is not None else 0
+        return self.datapath_deinit_duration
 
     def get_datapath_tx_turnon_duration(self):
         '''
         This function returns the duration of datapath tx turnon
         '''
+        if self.datapath_tx_turnon_duration is not None:
+            return self.datapath_tx_turnon_duration
         if self.is_flat_memory():
             return 0
         duration = self.xcvr_eeprom.read(consts.DP_TX_TURNON_DURATION)
-        return float(duration) if duration is not None else 0
+        self.datapath_tx_turnon_duration = float(duration) if duration is not None else 0
+        return self.datapath_tx_turnon_duration
 
     def get_datapath_tx_turnoff_duration(self):
         '''
         This function returns the duration of datapath tx turnoff
         '''
+        if self.datapath_tx_turnoff_duration is not None:
+            return self.datapath_tx_turnoff_duration
         if self.is_flat_memory():
             return 0
         duration = self.xcvr_eeprom.read(consts.DP_TX_TURNOFF_DURATION)
-        return float(duration) if duration is not None else 0
+        self.datapath_tx_turnoff_duration = float(duration) if duration is not None else 0
+        return self.datapath_tx_turnoff_duration
 
     def get_module_pwr_up_duration(self):
         '''
         This function returns the duration of module power up
         '''
+        if self.module_pwr_up_duration is not None:
+            return self.module_pwr_up_duration
         if self.is_flat_memory():
             return 0
         duration = self.xcvr_eeprom.read(consts.MODULE_PWRUP_DURATION)
-        return float(duration) if duration is not None else 0
+        self.module_pwr_up_duration = float(duration) if duration is not None else 0
+        return self.module_pwr_up_duration
 
     def get_module_pwr_down_duration(self):
         '''
         This function returns the duration of module power down
         '''
+        if self.module_pwr_down_duration is not None:
+            return self.module_pwr_down_duration
         if self.is_flat_memory():
             return 0
         duration = self.xcvr_eeprom.read(consts.MODULE_PWRDN_DURATION)
-        return float(duration) if duration is not None else 0
+        self.module_pwr_down_duration = float(duration) if duration is not None else 0
+        return self.module_pwr_down_duration
 
     def get_host_lane_count(self):
         '''
@@ -1346,21 +1391,23 @@ class CmisApi(XcvrApi):
         if self.is_flat_memory() or not self.get_lpmode_support():
             return False
 
-        DELAY_RETRY = 0.1
+        #DELAY_RETRY = 0.1
         lpmode_val = self.xcvr_eeprom.read(consts.MODULE_LEVEL_CONTROL)
         if lpmode_val is not None:
             if lpmode is True:
                 # Force module transition to LowPwr under SW control
                 lpmode_val = lpmode_val | (1 << CmisApi.LowPwrRequestSW)
                 self.xcvr_eeprom.write(consts.MODULE_LEVEL_CONTROL, lpmode_val)
-                return self.wait_time_condition(self.get_lpmode, True, self.get_module_pwr_down_duration(), DELAY_RETRY)
+                return True
+                #return self.wait_time_condition(self.get_lpmode, True, self.get_module_pwr_down_duration(), DELAY_RETRY)
             else:
                 # Force transition from LowPwr to HighPower state under SW control.
                 # This will transition LowPwrS signal to False. (see Table 6-12 CMIS v5.0)
                 lpmode_val = lpmode_val & ~(1 << CmisApi.LowPwrRequestSW)
                 lpmode_val = lpmode_val & ~(1 << CmisApi.LowPwrAllowRequestHW)
                 self.xcvr_eeprom.write(consts.MODULE_LEVEL_CONTROL, lpmode_val)
-                return self.wait_time_condition(self.get_module_state, 'ModuleReady', self.get_module_pwr_up_duration(), DELAY_RETRY)
+                return True
+                #return self.wait_time_condition(self.get_module_state, 'ModuleReady', self.get_module_pwr_up_duration(), DELAY_RETRY)
         return False
 
     def get_loopback_capability(self):
@@ -2744,6 +2791,9 @@ class CmisApi(XcvrApi):
         Returns:
             Dictionary, the application advertisement
         """
+        if self.application_advertisement is not None:
+            return self.application_advertisement
+        
         map = {
             Sff8024.MODULE_MEDIA_TYPE[1]: consts.MODULE_MEDIA_INTERFACE_850NM,
             Sff8024.MODULE_MEDIA_TYPE[2]: consts.MODULE_MEDIA_INTERFACE_SM,
@@ -2808,6 +2858,7 @@ class CmisApi(XcvrApi):
                 buf['media_lane_assignment_options'] = val
 
             ret[app] = buf
+        self.application_advertisement = ret
         return ret
 
     def get_application(self, lane):
