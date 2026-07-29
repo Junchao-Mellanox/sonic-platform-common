@@ -229,6 +229,76 @@ class TestCmis(object):
         result = self.api.get_cmis_rev()
         assert result == expected
 
+    @pytest.mark.parametrize("rev_str, expected", [
+        ("5.3", True),    # CMIS 5.3 -> PasswordCmdResult defined
+        ("5.4", True),    # CMIS 5.4
+        ("6.0", True),    # CMIS 6.0
+        ("5.2", False),   # CMIS 5.2 -> register reserved
+        ("4.0", False),   # CMIS 4.0
+        ("None.None", False),  # unreadable revision
+        ("", False),      # unparseable
+    ])
+    def test_supports_password_cmd_result(self, rev_str, expected):
+        """_supports_password_cmd_result gates on CMIS >= 5.3"""
+        self.api.get_cmis_rev = MagicMock(return_value=rev_str)
+        assert self.api._supports_password_cmd_result() is expected
+
+    @patch("sonic_platform_base.sonic_xcvr.api.public.cmis.time.sleep", MagicMock())
+    def test_read_password_cmd_result_polls_past_in_progress(self):
+        """_read_password_cmd_result polls past 'in progress'/unreadable states"""
+        self.api.xcvr_eeprom.read = MagicMock(side_effect=[
+            consts.PASSWORD_RESULT_IN_PROGRESS,
+            None,  # module may reject reads until the result is determined
+            consts.PASSWORD_RESULT_HOST_ACCEPTED,
+        ])
+        assert self.api._read_password_cmd_result() == consts.PASSWORD_RESULT_HOST_ACCEPTED
+        assert self.api.xcvr_eeprom.read.call_count == 3
+
+    @patch("sonic_platform_base.sonic_xcvr.api.public.cmis.time.sleep", MagicMock())
+    def test_read_password_cmd_result_timeout(self):
+        """_read_password_cmd_result returns None when the result never resolves"""
+        self.api.xcvr_eeprom.read = MagicMock(return_value=consts.PASSWORD_RESULT_IN_PROGRESS)
+        assert self.api._read_password_cmd_result() is None
+
+    def test_enter_password_via_memory_write_fails(self):
+        """enter_password_via_memory returns False when the Password Entry Area write fails"""
+        self.api.xcvr_eeprom.write = MagicMock(return_value=False)
+        self.api._supports_password_cmd_result = MagicMock(return_value=True)
+        self.api.xcvr_eeprom.read = MagicMock()
+        assert self.api.enter_password_via_memory(0x00001011) is False
+        self.api.xcvr_eeprom.write.assert_called_once_with(consts.PASSWORD_ENTRY, 0x00001011)
+        # Write failed -> PasswordCmdResult is never read
+        self.api.xcvr_eeprom.read.assert_not_called()
+
+    def test_enter_password_via_memory_pre_5_3_best_effort(self):
+        """enter_password_via_memory is best-effort on pre-5.3 without reading PasswordCmdResult"""
+        self.api.xcvr_eeprom.write = MagicMock(return_value=True)
+        self.api._supports_password_cmd_result = MagicMock(return_value=False)
+        self.api.xcvr_eeprom.read = MagicMock()
+        assert self.api.enter_password_via_memory(0x00001011) is True
+        self.api.xcvr_eeprom.write.assert_called_once_with(consts.PASSWORD_ENTRY, 0x00001011)
+        self.api.xcvr_eeprom.read.assert_not_called()
+
+    @pytest.mark.parametrize("result_code, expected", [
+        (consts.PASSWORD_RESULT_HOST_ACCEPTED, True),
+        (consts.PASSWORD_RESULT_MODULE_ACCEPTED, True),
+        (consts.PASSWORD_RESULT_NOT_ACCEPTED, False),
+        (consts.PASSWORD_RESULT_NOT_SUPPORTED, True),  # no confirmation -> best-effort
+    ])
+    def test_enter_password_via_memory_result_codes(self, result_code, expected):
+        """enter_password_via_memory honors PasswordCmdResult on CMIS 5.3+"""
+        self.api.xcvr_eeprom.write = MagicMock(return_value=True)
+        self.api._supports_password_cmd_result = MagicMock(return_value=True)
+        self.api._read_password_cmd_result = MagicMock(return_value=result_code)
+        assert self.api.enter_password_via_memory(0x00001011) is expected
+
+    def test_enter_password_via_memory_result_undetermined_best_effort(self):
+        """enter_password_via_memory is best-effort when PasswordCmdResult can't be determined"""
+        self.api.xcvr_eeprom.write = MagicMock(return_value=True)
+        self.api._supports_password_cmd_result = MagicMock(return_value=True)
+        self.api._read_password_cmd_result = MagicMock(return_value=None)
+        assert self.api.enter_password_via_memory(0x00001011) is True
+
     @pytest.mark.parametrize("mock_response, expected", [
         ("ModuleReady", "ModuleReady")
     ])

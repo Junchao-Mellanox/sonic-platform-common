@@ -13,17 +13,18 @@ class TestCdbFwHandler:
         self.reader = MagicMock()
         self.writer = MagicMock()
         self.mem_map = MagicMock()
-        
+        self.cmis_api = MagicMock()
+
         # Mock the parent class initialization
         with patch.object(CdbFwHandler, 'initFwHandler', return_value=True):
-            self.handler = CdbFwHandler(self.reader, self.writer, self.mem_map)
+            self.handler = CdbFwHandler(self.reader, self.writer, self.mem_map, self.cmis_api)
     
     def test_init_success(self):
         """Test successful initialization"""
         # Create a fresh handler without mocking initFwHandler
         handler = object.__new__(CdbFwHandler)
         # Initialize parent class
-        super(CdbFwHandler, handler).__init__(self.reader, self.writer, self.mem_map)
+        super(CdbFwHandler, handler).__init__(self.reader, self.writer, self.mem_map, self.cmis_api)
         # Set initial attributes
         handler.start_payload_size = 0
         handler.is_lpl_only = False
@@ -44,13 +45,13 @@ class TestCdbFwHandler:
         """Test initialization failure raises assertion"""
         with patch.object(CdbFwHandler, 'initFwHandler', return_value=False):
             with pytest.raises(AssertionError, match="Failed to initialize firmware handler"):
-                CdbFwHandler(self.reader, self.writer, self.mem_map)
+                CdbFwHandler(self.reader, self.writer, self.mem_map, self.cmis_api)
     
     def test_initFwHandler_send_cmd_failure(self):
         """Test initFwHandler when send_cmd fails"""
         # Create a new handler to test initFwHandler
         handler = object.__new__(CdbFwHandler)
-        super(CdbFwHandler, handler).__init__(self.reader, self.writer, self.mem_map)
+        super(CdbFwHandler, handler).__init__(self.reader, self.writer, self.mem_map, self.cmis_api)
         handler.start_payload_size = 0
         handler.is_lpl_only = False
         handler.rw_length_ext = 0
@@ -65,7 +66,7 @@ class TestCdbFwHandler:
         """Test initFwHandler when read_reply returns None"""
         # Create a new handler to test initFwHandler
         handler = object.__new__(CdbFwHandler)
-        super(CdbFwHandler, handler).__init__(self.reader, self.writer, self.mem_map)
+        super(CdbFwHandler, handler).__init__(self.reader, self.writer, self.mem_map, self.cmis_api)
         handler.start_payload_size = 0
         handler.is_lpl_only = False
         handler.rw_length_ext = 0
@@ -81,7 +82,7 @@ class TestCdbFwHandler:
         """Test initFwHandler with LPL only mechanism"""
         # Create a new handler to test initFwHandler
         handler = object.__new__(CdbFwHandler)
-        super(CdbFwHandler, handler).__init__(self.reader, self.writer, self.mem_map)
+        super(CdbFwHandler, handler).__init__(self.reader, self.writer, self.mem_map, self.cmis_api)
         handler.start_payload_size = 0
         handler.is_lpl_only = False
         handler.rw_length_ext = 0
@@ -100,7 +101,7 @@ class TestCdbFwHandler:
         """Test initFwHandler with EPL mechanism"""
         # Create a new handler to test initFwHandler
         handler = object.__new__(CdbFwHandler)
-        super(CdbFwHandler, handler).__init__(self.reader, self.writer, self.mem_map)
+        super(CdbFwHandler, handler).__init__(self.reader, self.writer, self.mem_map, self.cmis_api)
         handler.start_payload_size = 0
         handler.is_lpl_only = False
         handler.rw_length_ext = 0
@@ -441,7 +442,8 @@ class TestCdbFwHandlerIntegration:
         reader = MagicMock()
         writer = MagicMock()
         mem_map = MagicMock()
-        
+        cmis_api = MagicMock()
+
         # Mock successful initialization
         with patch.object(CdbFwHandler, 'send_cmd', return_value=True):
             with patch.object(CdbFwHandler, 'read_reply', return_value={
@@ -449,7 +451,7 @@ class TestCdbFwHandlerIntegration:
                 cdb_consts.CDB_WRITE_MECHANISM: "LPL",
                 cdb_consts.CDB_READ_WRITE_LENGTH_EXT: 240
             }):
-                handler = CdbFwHandler(reader, writer, mem_map)
+                handler = CdbFwHandler(reader, writer, mem_map, cmis_api)
         
         # Setup file content and operations for start_fw_download
         mock_file.return_value.read.side_effect = [

@@ -35,7 +35,7 @@ class CmisCdbFw:
             return None
 
         try:
-            return CdbFw(self.xcvr_eeprom.reader, self.xcvr_eeprom.writer, self._cdb_mem_map)
+            return CdbFw(self.xcvr_eeprom.reader, self.xcvr_eeprom.writer, self._cdb_mem_map, cmis_api=self)
         except AssertionError as err:
             log.log_error("Failed to initialize CDB firmware handler due to assertion: {}".format(err))
         except Exception as err:

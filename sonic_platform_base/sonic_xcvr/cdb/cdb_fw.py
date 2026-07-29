@@ -14,8 +14,8 @@ log = SysLogger(SYSLOG_IDENTIFIER)
 log.logger.propagate = False
 
 class CdbFwHandler(CdbCmdHandler):
-    def __init__(self, reader, writer, mem_map):
-        super(CdbFwHandler, self).__init__(reader, writer, mem_map)
+    def __init__(self, reader, writer, mem_map, cmis_api):
+        super(CdbFwHandler, self).__init__(reader, writer, mem_map, cmis_api)
         self.start_payload_size = 0
         self.is_lpl_only = False
         self.rw_length_ext = 0
