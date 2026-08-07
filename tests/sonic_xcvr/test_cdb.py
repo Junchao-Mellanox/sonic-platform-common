@@ -533,8 +533,7 @@ class TestCdbCmdHandler:
         self.reader = MagicMock()
         self.writer = MagicMock()
         self.mem_map = MagicMock()
-        self.cmis_api = MagicMock()
-        self.handler = CdbCmdHandler(self.reader, self.writer, self.mem_map, self.cmis_api)
+        self.handler = CdbCmdHandler(self.reader, self.writer, self.mem_map)
     
     # Tests for write_epl_page method
     def test_write_epl_page_success(self):
@@ -889,19 +888,17 @@ class TestCdbCmdHandler:
         assert result == expected
 
     def test_enter_password_valid(self):
-        """Test enter_password succeeds via the primary CDB command 0001h path"""
+        """Test enter_password sends CDB command 0001h"""
         self.handler.send_cmd = MagicMock(return_value=True)
         result = self.handler.enter_password(0x00001011)
         assert result is True
-        # Primary path: CDB command 0001h; no non-CDB fallback needed
         self.handler.send_cmd.assert_called_once_with(
             cdb_consts.CDB_ENTER_PASSWORD_CMD,
             {"password": 0x00001011}
         )
-        self.cmis_api.enter_password_via_memory.assert_not_called()
 
     def test_enter_password_default(self):
-        """Test enter_password with the default password via the CDB command"""
+        """Test enter_password with the default password"""
         self.handler.send_cmd = MagicMock(return_value=True)
         result = self.handler.enter_password()
         assert result is True
@@ -909,48 +906,18 @@ class TestCdbCmdHandler:
             cdb_consts.CDB_ENTER_PASSWORD_CMD,
             {"password": cdb_consts.CDB_DEFAULT_PASSWORD}
         )
-        self.cmis_api.enter_password_via_memory.assert_not_called()
 
-    def test_enter_password_fallback_to_memory_write(self):
-        """Test enter_password delegates to the CmisApi Password Entry Area write when the CDB command fails"""
+    def test_enter_password_cdb_failure(self):
+        """Test enter_password propagates a CDB command failure to the caller"""
         self.handler.send_cmd = MagicMock(return_value=False)
-        self.cmis_api.enter_password_via_memory.return_value = True
-        result = self.handler.enter_password(0x00001011)
-        assert result is True
-        # CDB command tried first, then the non-CDB fallback on the CmisApi
-        self.handler.send_cmd.assert_called_once_with(
-            cdb_consts.CDB_ENTER_PASSWORD_CMD,
-            {"password": 0x00001011}
-        )
-        self.cmis_api.enter_password_via_memory.assert_called_once_with(0x00001011)
+        assert self.handler.enter_password(0x00001011) is False
 
-    def test_enter_password_fallback_returns_memory_result(self):
-        """Test enter_password propagates the CmisApi fallback result (e.g. rejection)"""
-        self.handler.send_cmd = MagicMock(return_value=False)
-        self.cmis_api.enter_password_via_memory.return_value = False
-        result = self.handler.enter_password(0x00001011)
-        assert result is False
-        self.cmis_api.enter_password_via_memory.assert_called_once_with(0x00001011)
-
-    def test_enter_password_invalid_no_fallback(self):
-        """Test an invalid password is rejected without touching either entry path"""
+    def test_enter_password_invalid_no_cmd(self):
+        """Test an invalid password is rejected without sending a CDB command"""
         self.handler.send_cmd = MagicMock(return_value=True)
         result = self.handler.enter_password("not_an_int")
         assert result is False
         self.handler.send_cmd.assert_not_called()
-        self.cmis_api.enter_password_via_memory.assert_not_called()
-
-    def test_cmis_api_weakref_dereferences_to_owner(self):
-        """Test the cmis_api property returns the live owning CmisApi"""
-        assert self.handler.cmis_api is self.cmis_api
-
-    def test_enter_password_fallback_owner_collected(self):
-        """Test the CDB fallback returns False when the owning CmisApi has been collected"""
-        self.handler.send_cmd = MagicMock(return_value=False)
-        # Simulate the weak reference going dead (owning CmisApi collected)
-        self.handler._cmis_api_ref = lambda: None
-        result = self.handler.enter_password(0x00001011)
-        assert result is False
 
     def test_write_lpl_block(self):
         """Test write_lpl_block sends correct command"""

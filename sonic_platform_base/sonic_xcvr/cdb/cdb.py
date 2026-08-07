@@ -5,7 +5,6 @@
 """
 
 import time
-import weakref
 from sonic_py_common.syslogger import SysLogger
 from ..fields import cdb_consts
 from ..xcvr_eeprom import XcvrEeprom
@@ -15,24 +14,9 @@ log = SysLogger(SYSLOG_IDENTIFIER)
 log.logger.propagate = False
 
 class CdbCmdHandler(XcvrEeprom):
-    def __init__(self, reader, writer, mem_map, cmis_api):
+    def __init__(self, reader, writer, mem_map):
         super(CdbCmdHandler, self).__init__(reader, writer, mem_map)
         self.last_cmd_status = None
-        # CmisApi that owns this handler. Required, because the non-CDB password
-        # entry path (Password Entry Area write) and the module CMIS revision it
-        # depends on live on the CmisApi / CMIS memory map, not on the CDB side.
-        #
-        # Held as a weak reference to avoid a strong reference cycle: the CmisApi
-        # owns (and caches) this handler, so a strong back-reference here would
-        # form CmisApi -> handler -> CmisApi. The CmisApi always outlives the
-        # handler (it created and holds it), so dereferencing is safe in
-        # practice; self.cmis_api returns None only once the owning API is gone.
-        self._cmis_api_ref = weakref.ref(cmis_api)
-
-    @property
-    def cmis_api(self):
-        """The owning CmisApi, or None if it has already been collected."""
-        return self._cmis_api_ref()
 
     def read_reply(self, cdb_cmd_id):
         """
@@ -149,45 +133,23 @@ class CdbCmdHandler(XcvrEeprom):
         """
         return self.last_cmd_status
 
-    def _enter_password_via_cdb(self, password):
-        """
-        Enter the host password via CDB command 0001h. This is the primary
-        password entry method.
-        """
-        payload = {"password": password}
-        return self.send_cmd(cdb_consts.CDB_ENTER_PASSWORD_CMD, payload)
-
     def enter_password(self, password=cdb_consts.CDB_DEFAULT_PASSWORD):
         """
-        Enter the CMIS host password to unlock protected CDB/EEPROM access.
+        Enter the host password via CDB command 0001h. This path is synchronous:
+        send_cmd waits for and checks the CDB status.
 
-        The password is entered via CDB command 0001h first, since that path is
-        synchronous (send_cmd waits for and checks the CDB status). If it fails
-        -- for modules that do not unlock via the CDB command -- fall back to the
-        non-CDB Password Entry Area write, which lives on the CmisApi (the
-        register is in the CMIS memory map, not the CDB one).
+        Modules that do not unlock this way are handled by the caller, which
+        falls back to the non-CDB Password Entry Area write on the CmisApi.
 
-        Returns True if the password was accepted (or delivered best-effort),
-        False/None otherwise.
+        Returns True if the password was accepted, False/None otherwise.
         """
         if not isinstance(password, int) or \
                 password < 0 or password > 0xFFFFFFFF:
             log.log_notice("Invalid password: must be an integer in range 0..0xFFFFFFFF")
             return False
 
-        # Primary: enter the password via CDB command 0001h.
-        if self._enter_password_via_cdb(password) is True:
-            return True
-
-        # Fallback: the non-CDB Password Entry Area write, owned by the CmisApi.
-        log.log_notice("CDB command 0001h password entry failed; "
-                       "falling back to Password Entry Area write")
-        cmis_api = self.cmis_api
-        if cmis_api is None:
-            log.log_notice("Owning CmisApi is no longer available; "
-                           "cannot perform Password Entry Area fallback")
-            return False
-        return cmis_api.enter_password_via_memory(password)
+        payload = {"password": password}
+        return self.send_cmd(cdb_consts.CDB_ENTER_PASSWORD_CMD, payload)
 
     def write_lpl_block(self, blkaddr, blkdata, timeout=None):
         """

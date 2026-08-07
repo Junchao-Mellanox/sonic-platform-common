@@ -1896,6 +1896,9 @@ class TestCmis(object):
 
     def _setup_cdb_fw_hdlr(self):
         mock_fw_hdlr = MagicMock()
+        # CDB command 0001h succeeds by default, so _enter_password does not
+        # fall back to the Password Entry Area write unless a test asks for it.
+        mock_fw_hdlr.enter_password.return_value = True
         self.api._cdb_fw_hdlr = mock_fw_hdlr
         self.api._init_cdb_fw_handler = True
         return mock_fw_hdlr
@@ -1920,7 +1923,6 @@ class TestCmis(object):
         ('cdb_firmware_download_complete', 'complete_fw_download', []),
         ('cdb_start_firmware_download', 'start_fw_download', ['/tmp/fw.bin']),
         ('cdb_lpl_block_write', 'write_lpl_block', [0x1000, b'\x01\x02']),
-        ('cdb_enter_host_password', 'enter_password', [0x00001011]),
     ])
     def test_cdb_commands_failure(self, method, handler_method, args):
         mock_fw_hdlr = self._setup_cdb_fw_hdlr()
@@ -1932,6 +1934,73 @@ class TestCmis(object):
         }
         result = getattr(self.api, method)(*args)
         assert result == 0x44
+
+    def test_cdb_enter_host_password_failure(self):
+        """Both CDB command 0001h and the Password Entry Area fallback fail"""
+        mock_fw_hdlr = self._setup_cdb_fw_hdlr()
+        mock_fw_hdlr.enter_password.return_value = False
+        mock_fw_hdlr.get_cmd_status_code.return_value = {
+            cdb_consts.CDB1_IS_BUSY: False,
+            cdb_consts.CDB1_HAS_FAILED: True,
+            cdb_consts.CDB1_STATUS: 0x04,
+        }
+        self.api.enter_password_via_memory = MagicMock(return_value=False)
+        assert self.api.cdb_enter_host_password(0x00001011) == 0x44
+        self.api.enter_password_via_memory.assert_called_once_with(0x00001011)
+        del self.api.enter_password_via_memory
+
+    def test_enter_password_cdb_success(self):
+        """_enter_password stops at CDB command 0001h when it succeeds"""
+        mock_fw_hdlr = self._setup_cdb_fw_hdlr()
+        mock_fw_hdlr.enter_password.return_value = True
+        self.api.enter_password_via_memory = MagicMock(return_value=True)
+        assert self.api._enter_password() is True
+        mock_fw_hdlr.enter_password.assert_called_once_with(cdb_consts.CDB_DEFAULT_PASSWORD)
+        self.api.enter_password_via_memory.assert_not_called()
+        del self.api.enter_password_via_memory
+
+    @pytest.mark.parametrize("memory_result, expected", [
+        (True, True),
+        (False, False),
+    ])
+    def test_enter_password_memory_fallback(self, memory_result, expected):
+        """_enter_password falls back to the Password Entry Area write and propagates its result"""
+        mock_fw_hdlr = self._setup_cdb_fw_hdlr()
+        mock_fw_hdlr.enter_password.return_value = False
+        self.api.enter_password_via_memory = MagicMock(return_value=memory_result)
+        assert self.api._enter_password(0x00001011) is expected
+        mock_fw_hdlr.enter_password.assert_called_once_with(0x00001011)
+        self.api.enter_password_via_memory.assert_called_once_with(0x00001011)
+        del self.api.enter_password_via_memory
+
+    @pytest.mark.parametrize("memory_result, expected", [
+        (True, True),
+        (False, False),
+    ])
+    def test_enter_password_no_cdb_handler(self, memory_result, expected):
+        """_enter_password goes straight to the Password Entry Area write without CDB"""
+        self.api._cdb_fw_hdlr = None
+        self.api._init_cdb_fw_handler = False
+        self.api.enter_password_via_memory = MagicMock(return_value=memory_result)
+        assert self.api._enter_password(0x00001011) is expected
+        self.api.enter_password_via_memory.assert_called_once_with(0x00001011)
+        del self.api.enter_password_via_memory
+
+    @pytest.mark.parametrize("password", [
+        "not_an_int",
+        -1,
+        0x100000000,
+        12.5,
+        None,
+    ])
+    def test_enter_password_invalid(self, password):
+        """_enter_password rejects out-of-range passwords without touching either path"""
+        mock_fw_hdlr = self._setup_cdb_fw_hdlr()
+        self.api.enter_password_via_memory = MagicMock(return_value=True)
+        assert self.api._enter_password(password) is False
+        mock_fw_hdlr.enter_password.assert_not_called()
+        self.api.enter_password_via_memory.assert_not_called()
+        del self.api.enter_password_via_memory
 
     @pytest.mark.parametrize("method, args", [
         ('cdb_run_firmware', [0x01]),
